@@ -1,0 +1,17 @@
+[project]
+name = "dispersal-host-check"
+version = "0.1.0"
+description = "A read-only local host security posture report"
+requires-python = ">=3.11"
+license = "MIT"
+
+[project.scripts]
+host-check = "host_check:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["host_check"]
+package-dir = {"" = "src"}
