@@ -92,18 +92,37 @@ def parse_ss_listeners(output: str) -> tuple[int, int]:
     return listeners, wildcard
 
 
+def parse_windows_listen_addresses(output: str) -> tuple[int, int]:
+    addresses = [line.strip() for line in output.splitlines() if line.strip()]
+    return len(addresses), sum(address in ("0.0.0.0", "::") for address in addresses)
+
+
+def parse_netstat_listeners(output: str) -> tuple[int, int]:
+    listeners = 0
+    wildcard = 0
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 2 or "LISTENING" not in line.upper():
+            continue
+        listeners += 1
+        if fields[1].startswith(("0.0.0.0:", "[::]:")):
+            wildcard += 1
+    return listeners, wildcard
+
+
 def check_listeners(system: str) -> Finding:
     if system == "Windows":
-        command = ["powershell", "-NoProfile", "-Command", "@(Get-NetTCPConnection -State Listen -ErrorAction Stop).Count"]
+        command = ["powershell", "-NoProfile", "-Command", "Get-NetTCPConnection -State Listen -ErrorAction Stop | ForEach-Object LocalAddress"]
         code, output = run_command(command)
-        count_match = re.search(r"\d+", output)
-        if code == 0 and count_match:
-            return Finding("listeners", "pass", f"{count_match.group(0)} TCP listeners found", "Review them with Open Ports when the baseline changes.")
-        code, output = run_command(["netstat", "-ano", "-p", "tcp"])
-        if code == 0:
-            listeners = sum("LISTENING" in line.upper() for line in output.splitlines())
-            return Finding("listeners", "pass", f"{listeners} TCP listeners found", "Review them with Open Ports when the baseline changes.")
-        return Finding("listeners", "unknown", "Could not enumerate TCP listeners")
+        if code == 0 and output:
+            count, wildcard = parse_windows_listen_addresses(output)
+        else:
+            code, output = run_command(["netstat", "-ano", "-p", "tcp"])
+            if code != 0:
+                return Finding("listeners", "unknown", "Could not enumerate TCP listeners")
+            count, wildcard = parse_netstat_listeners(output)
+        status = "warn" if wildcard else "pass"
+        return Finding("listeners", status, f"{count} TCP listeners; {wildcard} bound to all interfaces", "Review them with Open Ports when the baseline changes.")
     if shutil.which("ss"):
         code, output = run_command(["ss", "-H", "-lntu"])
         if code == 0:
