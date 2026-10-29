@@ -20,8 +20,8 @@ Run the command with `--help` for every option. The tool works locally, collects
 
 ## Principles
 
-- **Local first.** Host data stays on the host unless you explicitly configure a webhook.
-- **Safe by default.** Inspection is read-only and mutation requires a deliberate command.
+- **Local first.** Host data stays on the host. The tool makes no network connections.
+- **Safe by default.** Inspection is read-only. The tool never changes the host.
 - **Small contract.** The tool solves one defensive job and reports its limits plainly.
 - **Scriptable.** Stable exit codes and structured output make automation practical.
 

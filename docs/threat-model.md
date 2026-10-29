@@ -2,13 +2,13 @@
 
 ## Protects against
 
-Inspects firewall state, listening services, SSH posture, update signals, accounts, and selected permissions without changing the host.
+Inspects firewall state, listening services, SSH posture, accounts, and selected permissions without changing the host.
 
 ## Trust boundaries
 
 - The local operator and operating system are trusted.
 - Input files, log lines, repository content, and command output are untrusted.
-- Webhook destinations are contacted only when explicitly configured.
+- The tool makes no network connections. Reports go only to stdout or the `--output` path.
 - Elevated privileges are never assumed to imply consent for unrelated changes.
 
 ## Non-goals
@@ -19,4 +19,4 @@ Inspects firewall state, listening services, SSH posture, update signals, accoun
 
 ## Sensitive data
 
-Generated reports can contain paths, usernames, process names, or network bindings. They are ignored by Git where the tool creates them. Review reports before sharing them.
+Generated reports can contain paths, usernames, process names, or network bindings. The tool writes them only to stdout or the `--output` path. Inside a clone, `reports/` is ignored by Git. Review reports before sharing them.
