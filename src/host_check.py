@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import platform
@@ -113,17 +114,46 @@ def check_listeners(system: str) -> Finding:
     return Finding("listeners", "unknown", "The ss utility is unavailable")
 
 
-def parse_sshd_settings(text: str) -> dict[str, str]:
+def parse_sshd_settings(text: str, read_include: Callable[[str], list[str]] | None = None) -> dict[str, str]:
     settings: dict[str, str] = {}
+    _apply_sshd_settings(text, settings, read_include, depth=0)
+    return settings
+
+
+def _apply_sshd_settings(text: str, settings: dict[str, str], read_include: Callable[[str], list[str]] | None, depth: int) -> bool:
+    """Apply sshd's first-value-wins rule; return False once a Match block starts."""
     for raw in text.splitlines():
         line = raw.split("#", 1)[0].strip()
         if not line:
             continue
-        key, _, value = line.partition(" ")
-        if key.lower() == "match":
-            break
-        settings.setdefault(key.lower(), value.strip().lower())
-    return settings
+        parts = re.split(r"\s*=\s*|\s+", line, maxsplit=1)
+        key = parts[0].lower()
+        value = parts[1].strip() if len(parts) > 1 else ""
+        if key == "match":
+            return False
+        if key == "include":
+            if read_include is None or depth >= 16:
+                continue
+            for included in read_include(value):
+                if not _apply_sshd_settings(included, settings, read_include, depth + 1):
+                    return False
+            continue
+        settings.setdefault(key, value.lower())
+    return True
+
+
+def read_sshd_includes(patterns: str, base: Path) -> list[str]:
+    texts = []
+    for pattern in patterns.split():
+        candidate = Path(pattern)
+        if not candidate.is_absolute():
+            candidate = base / candidate
+        for match in sorted(glob.glob(str(candidate))):
+            try:
+                texts.append(Path(match).read_text(encoding="utf-8", errors="replace"))
+            except OSError:
+                continue
+    return texts
 
 
 def check_ssh(system: str) -> Finding:
@@ -134,7 +164,10 @@ def check_ssh(system: str) -> Finding:
     if not path.exists():
         return Finding("ssh", "pass", "No SSH server configuration found")
     try:
-        settings = parse_sshd_settings(path.read_text(encoding="utf-8", errors="replace"))
+        settings = parse_sshd_settings(
+            path.read_text(encoding="utf-8", errors="replace"),
+            lambda patterns: read_sshd_includes(patterns, path.parent),
+        )
     except OSError as exc:
         return Finding("ssh", "unknown", "SSH configuration is not readable", str(exc))
     root = settings.get("permitrootlogin", "prohibit-password")
